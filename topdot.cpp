@@ -9,6 +9,7 @@ namespace py = pybind11;
 #include <limits>
 #include <algorithm>
 #include <omp.h>
+#include <math.h>
 
 struct candidate {
     int index; 
@@ -103,6 +104,66 @@ void __topdot(
     return;
 }
 
+void __bf_dense(
+  int d_row,
+  int d_col,
+  int q_row,
+  int q_col,
+  
+  double* D,
+  double* Q,
+  double* sim
+) {
+    #pragma omp parallel for
+    for(int qr = 0; qr < q_row; qr++) {
+        double* q = Q + (qr * q_col);
+        for(int dr = 0; dr < d_row; dr++) {
+            
+            // double best_sim = -9999;
+            double best_sim = 9999999;
+            for(int dc = 0; dc < d_col - q_col + 1; dc++) {
+                double* d = D + (dr * d_col + dc);
+                
+                double acc = 0;
+                for(int i = 0; i < q_col; i++) {
+                    acc += pow(q[i] - d[i], 2);
+                }
+                acc = sqrt(acc);
+                
+                if(acc < best_sim) {
+                    best_sim = acc;
+                }
+            }
+            
+            sim[qr * d_row + dr] = best_sim;
+        }
+    }
+}
+
+// --
+// pybind11 wrappers
+
+void _bf_dense(  
+  int d_row,
+  int d_col,
+  int q_row,
+  int q_col,
+  
+  py::array_t<double> D,
+  py::array_t<double> Q,
+  py::array_t<double> sim
+) {
+    __bf_dense(
+      d_row,
+      d_col,
+      q_row,
+      q_col,
+      static_cast<double*>(D.request().ptr),
+      static_cast<double*>(Q.request().ptr),
+      static_cast<double*>(sim.request().ptr)
+    );
+}
+
 
 void _topdot(  
   int n_row,
@@ -159,5 +220,20 @@ PYBIND11_MODULE(topdot, m) {
       
       py::arg("Cj"),
       py::arg("Cx")
+    );
+    
+    m.def(
+      "_bf_dense",
+      &_bf_dense,
+      "_bf_dense",
+      py::arg("d_row"),
+      py::arg("d_col"),
+
+      py::arg("q_row"),
+      py::arg("q_col"),
+      
+      py::arg("D"),
+      py::arg("Q"),
+      py::arg("sim")
     );
 }
