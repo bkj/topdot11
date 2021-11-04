@@ -49,6 +49,40 @@ def run_topdot(A, B, k, lower_bound=0):
     
     return D, I
 
+
+def run_topdot2(A, B, k, lower_bound=0):
+    A = A.tocsr()
+    B = B.tocsr()
+    
+    num_rows = A.shape[0]
+    
+    I = np.empty(num_rows * k, dtype=np.int32)
+    D = np.empty(num_rows * k, dtype=A.dtype)
+    
+    topdot._topdot2(
+        n_row=np.int32(num_rows),
+        n_col=np.int32(B.shape[1]),
+        
+        Ap=np.asarray(A.indptr, dtype=np.int32),
+        Aj=np.asarray(A.indices, dtype=np.int32),
+        Ax=A.data,
+        
+        Bp=np.asarray(B.indptr, dtype=np.int32),
+        Bj=np.asarray(B.indices, dtype=np.int32),
+        Bx=B.data,
+        
+        k=np.int32(k),
+        lower_bound=lower_bound,
+        
+        Cj=I,
+        Cx=D,
+    )
+    
+    I = np.array(I).reshape(num_rows, k)
+    D = np.array(D).reshape(num_rows, k)
+    
+    return D, I
+
 def _run_naive(csr_row, ntop):
     nnz = csr_row.getnnz()
     if nnz == 0:
@@ -90,6 +124,11 @@ if __name__ == "__main__":
     td_D, td_I = run_topdot(A, B, args.k)
     td_time = time() - t
     print('td_time   ', td_time, file=sys.stderr)
+
+    t = time()
+    td_D2, td_I2 = run_topdot2(A, B, args.k)
+    td_time2 = time() - t
+    print('td_time   ', td_time2, file=sys.stderr)
     
     t = time()
     na_D, na_I = run_naive(A, B, args.k)
@@ -110,6 +149,7 @@ if __name__ == "__main__":
     print(json.dumps({
         "gen_time"   : gen_time,
         "td_time"    : td_time,
+        "td_time2"   : td_time2,
         "naive_time" : naive_time,
         "dot_time"   : dot_time,
     }))

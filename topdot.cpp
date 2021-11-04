@@ -31,8 +31,8 @@ void __topdot(
     
     #pragma omp parallel for
     for(int row = 0; row < n_row; row++){
-        std::vector<int>    next(n_col, -1);
-        std::vector<double> sums(n_col,  0);        
+        std::vector<int>    next(n_col, -1); // map instead of vector?
+        std::vector<double> sums(n_col,  0); // map instead of vector?
         std::vector<candidate> candidates;
         
         int head   = -2;
@@ -103,6 +103,73 @@ void __topdot(
     return;
 }
 
+void __topdot2(
+        int n_row,
+        int n_col,
+        int* A_indptr, int* A_indices, double* A_data,
+        int* B_indptr, int* B_indices, double* B_data,
+        int k,
+        double lower_bound,
+        int* Cj, double* Cx
+) {
+    
+    int n_threads;
+    #pragma omp parallel
+    {
+        n_threads = omp_get_num_threads();
+    }
+    
+    int* idxs_     = (int*)malloc(n_threads * n_col * sizeof(int));
+    double* sums_  = (double*)malloc(n_threads * n_col * sizeof(double));
+    
+    #pragma omp parallel for
+    for(int row = 0; row < n_row; row++){
+        
+        int tid      = omp_get_thread_num();
+        int* idxs    = idxs_ + tid * n_col;
+        double* sums = sums_ + tid * n_col;
+        
+        for(int i = 0; i < n_col; i++) idxs[i] = i;
+        for(int i = 0; i < n_col; i++) sums[i] = 0;
+        
+        for(int a_offset = A_indptr[row]; a_offset < A_indptr[row + 1]; a_offset++){
+            
+            int a_col    = A_indices[a_offset];
+            double a_val = A_data[a_offset];
+            
+            for(int b_offset = B_indptr[a_col]; b_offset < B_indptr[a_col + 1]; b_offset++){
+                int b_col    = B_indices[b_offset];
+                double b_val = B_data[b_offset];
+                sums[b_col] += a_val * b_val;
+            }
+        }
+        
+        std::nth_element(
+            idxs,
+            idxs + k,
+            idxs + n_col,
+            [&sums](int left, int right) {
+                return sums[left] > sums[right];
+            }
+        );
+        
+        for(int entry_idx = 0; entry_idx < k; entry_idx++){
+            if(sums[idxs[entry_idx]] != 0) {
+                Cj[row * k + entry_idx] = idxs[entry_idx];
+                Cx[row * k + entry_idx] = sums[idxs[entry_idx]];
+            } else {
+                Cj[row * k + entry_idx] = -1;
+                Cx[row * k + entry_idx] = -1;
+            }
+        }
+    }
+    
+    free(idxs_);
+    free(sums_);
+    
+    return;
+}
+
 
 void _topdot(  
   int n_row,
@@ -138,11 +205,67 @@ void _topdot(
     );
 }
 
+void _topdot2(  
+  int n_row,
+  int n_col,
+  
+  py::array_t<int> Ap,
+  py::array_t<int> Aj,
+  py::array_t<double> Ax,
+  
+  py::array_t<int> Bp,
+  py::array_t<int> Bj,
+  py::array_t<double> Bx,
+  
+  int k,
+  double lower_bound,
+  
+  py::array_t<int> Cj, 
+  py::array_t<double> Cx
+) {
+    __topdot2(
+      n_row,
+      n_col,
+      static_cast<int*>(Ap.request().ptr),
+      static_cast<int*>(Aj.request().ptr),
+      static_cast<double*>(Ax.request().ptr),
+      static_cast<int*>(Bp.request().ptr),
+      static_cast<int*>(Bj.request().ptr),
+      static_cast<double*>(Bx.request().ptr),
+      k,
+      lower_bound,
+      static_cast<int*>(Cj.request().ptr),
+      static_cast<double*>(Cx.request().ptr)
+    );
+}
+
 PYBIND11_MODULE(topdot, m) {
     m.def(
       "_topdot",
       &_topdot,
       "_topdot",
+      py::arg("n_row"),
+      py::arg("n_col"),
+      
+      py::arg("Ap"),
+      py::arg("Aj"),
+      py::arg("Ax"),
+      
+      py::arg("Bp"),
+      py::arg("Bj"),
+      py::arg("Bx"),
+      
+      py::arg("k"),
+      py::arg("lower_bound"),
+      
+      py::arg("Cj"),
+      py::arg("Cx")
+    );
+
+    m.def(
+      "_topdot2",
+      &_topdot2,
+      "_topdot2",
       py::arg("n_row"),
       py::arg("n_col"),
       
