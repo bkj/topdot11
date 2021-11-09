@@ -104,7 +104,8 @@ def run_naive(A, B, ntop, lower_bound=None):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dim', type=int, default=4096)
+    parser.add_argument('--r', type=int, default=4096)
+    parser.add_argument('--c', type=int, default=256)
     parser.add_argument('--k', type=int, default=128)
     parser.add_argument('--density', type=float, default=0.01)
     parser.add_argument('--seed', type=int, default=123)
@@ -115,8 +116,8 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     t = time()
-    A = sparse.rand(args.dim, args.dim, density=args.density, format='csr')
-    B = sparse.rand(args.dim, args.dim, density=args.density, format='csr')
+    A = sparse.rand(args.r, args.c, density=args.density, format='csr')
+    B = sparse.rand(args.c, args.r, density=args.density, format='csr')
     gen_time = time() - t
     print('gen_time  ', gen_time, file=sys.stderr)
     
@@ -130,27 +131,30 @@ if __name__ == "__main__":
     td_time2 = time() - t
     print('td_time   ', td_time2, file=sys.stderr)
     
-    t = time()
-    na_D, na_I = run_naive(A, B, args.k)
-    naive_time = time() - t
-    print('naive_time', naive_time, file=sys.stderr)
+    # t = time()
+    # na_D, na_I = run_naive(A, B, args.k)
+    # naive_time = time() - t
+    # print('naive_time', naive_time, file=sys.stderr)
     
-    rand_idx = np.random.choice(args.dim, args.k, replace=False)
-    for idx in rand_idx:
-        na_idx = sorted(na_I[idx])
-        td_idx = sorted(td_I[idx])
-        assert (na_idx == td_idx), "(na_idx != td_idx)"
+    # print(na_I)
+    # print(td_I)
     
-    t = time()
-    cc = A.dot(B)
-    dot_time = time() - t
-    print('dot_time  ', dot_time, file=sys.stderr)
+    # rand_idx = np.random.choice(args.dim, args.k, replace=False)
+    # for idx in rand_idx:
+    #     na_idx = sorted(na_I[idx])
+    #     td_idx = sorted(td_I[idx])
+    #     assert (na_idx == td_idx), "(na_idx != td_idx)"
+    
+    # t = time()
+    # cc = A.dot(B)
+    # dot_time = time() - t
+    # print('dot_time  ', dot_time, file=sys.stderr)
     
     print(json.dumps({
         "gen_time"   : gen_time,
         "td_time"    : td_time,
         "td_time2"   : td_time2,
-        "naive_time" : naive_time,
-        "dot_time"   : dot_time,
+        # "naive_time" : naive_time,
+        # "dot_time"   : dot_time,
     }))
     
